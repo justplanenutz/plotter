@@ -6,25 +6,26 @@ import shutil
 @click.command()
 @click.argument('numbers', nargs=-1, type=float)
 def plot_data(numbers):
-    """Detects terminal size and plots numbers to fill the screen."""
+    """Detects terminal size and plots numbers with custom labels."""
     if not numbers:
         click.echo("Usage: python script.py 10 20 30 40")
         return
 
     # 1. Determine Terminal Size
-    # columns (width) and lines (height)
     size = shutil.get_terminal_size()
     width = size.columns
-    height = size.lines - 2  # Subtracting 2 to account for the prompt/header
+    height = max(5, size.lines - 4)  # Leave room for labels/prompt
 
     # 2. Prepare Data
     data_string = "\n".join(str(n) for n in numbers)
 
     # 3. Gnuplot Commands
-    # 'set terminal dumb size' sets the dimensions of the ASCII plot
+    # 'set xlabel' and 'set ylabel' add the axis descriptions
     gnuplot_commands = [
         f'set terminal dumb size {width} {height}',
-        'plot "-" using 0:1 with lines title "Full Screen Data"',
+        'set ylabel "Mb/s"',
+        'set xlabel "Minutes"',
+        'plot "-" using 0:1 with lines title "Network Performance"',
         data_string,
         'e'
     ]
