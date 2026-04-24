@@ -26,6 +26,7 @@ def plot_data(numbers):
         'set ylabel "Mb/s"',
         'set xlabel "Minutes"',
         'plot "-" using 0:1 with lines title "Network Performance"',
+        'set grid',
         data_string,
         'e'
     ]

@@ -38,7 +38,7 @@ def speed_test() -> None:
         st.get_best_server()
         down = round(st.download() / 10**6, 2)
         # up = round(st.upload()/10**6,2)
-        data.insert(0, down)
+        data.insert(0,down)
         data = data[:SAMPLE_COUNT]
     # pylint: disable=bare-except
     except:

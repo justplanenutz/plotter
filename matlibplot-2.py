@@ -32,6 +32,7 @@ from matplotlib import animation
 import matplotlib.colors as mcolors
 from matplotlib.gridspec import GridSpec
 import numpy as np
+import speedtest
 
 # resolved colormaps – avoids pylint no-member on plt.cm / matplotlib.cm
 _CMAP_COOL   = matplotlib.colormaps.get_cmap("cool")
@@ -226,30 +227,12 @@ class FloatAnimator:
         norm   = mcolors.Normalize(lo, hi)
         cmap   = _CMAP_COOL
 
-        #for bar, v in zip(self.bars, y_vals):
-        #    bar.set_height(v)
-        #    bar.set_facecolor(cmap(norm(v)))
-
-        # self.ax_bar.set_ylim(lo - 0.5, hi + 0.5)
-
+        speed_test()
         # update history / line
         self.history.append(self.data[0])
         self.history = self.history[-self.history_len:]
         self.line_plot.set_ydata(self.history)
-        self.ax_line.set_ylim(min(self.history) - 0.3, max(self.history) + 0.3)
-
-        # update scatter
-        #self.scatter_plot.set_offsets(
-        #    np.column_stack([range(self.n), self.data])
-        #)
-        #self.scatter_plot.set_facecolor([cmap(norm(v)) for v in self.data])
-        #self.ax_scat.set_ylim(lo - 0.5, hi + 0.5)
-
-        # update title
-        #self.ax_bar.set_title(
-        #    f"Mode: {MODES[self.mode_idx]}   frame: {self.frame}",
-        #    color=ACCENT, fontsize=9, loc="right",
-        #)
+        self.ax_line.set_ylim(0, max(self.history) + 0.3)
 
     # ── keyboard events ────────────────────────────────────────────────────────
     def _connect_events(self):
@@ -280,26 +263,25 @@ class FloatAnimator:
         plt.show()
 
 
-# ── CLI entry point ────────────────────────────────────────────────────────────
-def parse_args() -> list[float]:
-    parser = argparse.ArgumentParser(
-        description="Animate an array of floats with matplotlib.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    parser.add_argument(
-        "values", nargs="*", type=float,
-        help="Space-separated floats to animate (omit to use built-in dataset)",
-    )
-    args = parser.parse_args()
-    return args.values if args.values else DEFAULT_DATA
-
+def speed_test() -> None:
+    """
+    Collect speed test data and append to the data array
+    """
+    global data
+    try:
+        st = speedtest.Speedtest()
+        st.get_best_server()
+        down = round(st.download() / 10**6, 2)
+        # up = round(st.upload()/10**6,2)
+        data.insert(0,down)
+        data = data[:SAMPLE_COUNT]
+    # pylint: disable=bare-except
+    except:
+        pass
+    # pylint: enable=bare-except
 
 if __name__ == "__main__":
-    data = parse_args()
-    if len(data) < 2:
-        print("Need at least 2 values. Using default dataset.")
-        data = DEFAULT_DATA
+    data = [ 0 for i in range(120)]
 
     animator = FloatAnimator(data)
     animator.run(interval_ms=10000)
