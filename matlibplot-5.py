@@ -12,6 +12,7 @@ Features:
 Requirements:
     pip install matplotlib speedtest-cli
 """
+# pylint: disable=invalid-name,global-statement
 
 import threading
 import time
@@ -19,14 +20,17 @@ import datetime
 import queue
 
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+from matplotlib import animation
 import matplotlib.dates as mdates
 import speedtest
+import click
 
 # ── Configuration ────────────────────────────────────────────────────────────
-POLL_INTERVAL_SECONDS = 60   # seconds between speed tests (min ~10 s recommended)
-MAX_POINTS = 180             # rolling window of data points shown on the graph
-
+POLL_INTERVAL_SECONDS = 60  # seconds between speed tests (min ~10 s recommended)
+MAX_POINTS = 180  # rolling window of data points shown on the graph
+ANIMATION_UPDATE_MSECS=1000
+COLOR_GRN = "#3bd44d"
+COLOR_RED = "#d43b43"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Thread-safe queue: worker → main thread
@@ -34,15 +38,16 @@ MAX_POINTS = 180             # rolling window of data points shown on the graph
 result_queue: queue.Queue = queue.Queue()
 
 # Storage for plot data
-timestamps:    list[datetime.datetime] = []
+timestamps: list[datetime.datetime] = []
 download_mbps: list[float] = []
-upload_mbps:   list[float] = []
+upload_mbps: list[float] = []
 
 # Status string displayed as the graph subtitle
 status_message = "Initialising first speed test…"
 
 
 # ── Background worker ─────────────────────────────────────────────────────────
+
 
 def speedtest_worker() -> None:
     """Run speed tests in a loop and push results onto result_queue."""
@@ -85,24 +90,52 @@ fig.patch.set_facecolor("#0d1117")
 ax.set_facecolor("#161b22")
 
 # Download line + fill
-(dl_line,) = ax.plot([], [], color="#0c451a", linewidth=2, zorder=3, label="Download")
-dl_area = ax.fill_between([], [], alpha=0)       # rebuilt each frame
+(dl_line,) = ax.plot([], [], color=COLOR_RED, linewidth=2, zorder=3, label="Download")
+dl_area = ax.fill_between([], [], alpha=0)  # rebuilt each frame
 
 # Upload line + fill
-(ul_line,) = ax.plot([], [], color="#7a0c06", linewidth=2, zorder=3, label="Upload")
-ul_area = ax.fill_between([], [], alpha=0)       # rebuilt each frame
+(ul_line,) = ax.plot([], [], color=COLOR_GRN, linewidth=2, zorder=3, label="Upload")
+ul_area = ax.fill_between([], [], alpha=0)  # rebuilt each frame
 
 # Average lines (dashed)
-(dl_avg_line,) = ax.plot([], [], color="#0c451a", linewidth=1.4,
-                         linestyle="--", zorder=4, alpha=0.75, label="DL Avg")
-(ul_avg_line,) = ax.plot([], [], color="#7a0c06", linewidth=1.4,
-                         linestyle="--", zorder=4, alpha=0.75, label="UL Avg")
+(dl_avg_line,) = ax.plot(
+    [],
+    [],
+    color=COLOR_RED,
+    linewidth=1.4,
+    linestyle="--",
+    zorder=4,
+    alpha=0.75,
+    label="DL Avg",
+)
+(ul_avg_line,) = ax.plot(
+    [],
+    [],
+    color=COLOR_GRN,
+    linewidth=1.4,
+    linestyle="--",
+    zorder=4,
+    alpha=0.75,
+    label="UL Avg",
+)
 
-ax.set_title("Real-Time Internet Speed Monitor", color="#e6edf3",
-             fontsize=15, fontweight="bold", pad=14)
-subtitle = ax.text(0.5, 1.01, status_message,
-                   transform=ax.transAxes, ha="center", va="bottom",
-                   fontsize=9, color="#8b949e")
+ax.set_title(
+    "Real-Time Internet Speed Monitor",
+    color="#e6edf3",
+    fontsize=15,
+    fontweight="bold",
+    pad=14,
+)
+subtitle = ax.text(
+    0.5,
+    1.01,
+    status_message,
+    transform=ax.transAxes,
+    ha="center",
+    va="bottom",
+    fontsize=9,
+    color="#8b949e",
+)
 
 ax.set_xlabel("Time", color="#8b949e", labelpad=8)
 ax.set_ylabel("Speed (Mb/s)", color="#8b949e", labelpad=8)
@@ -115,19 +148,29 @@ fig.autofmt_xdate(rotation=35)
 ax.grid(True, color="#21262d", linewidth=0.7, zorder=0)
 
 # Legend
-ax.legend(loc="upper left", facecolor="#161b22",
-          edgecolor="#30363d", labelcolor="#e6edf3", fontsize=9)
+ax.legend(
+    loc="upper left",
+    facecolor="#161b22",
+    edgecolor="#30363d",
+    labelcolor="#e6edf3",
+    fontsize=9,
+)
 
 # Stats summary box
 stats_text = ax.text(
-    0.99, 0.97, "",
+    0.99,
+    0.97,
+    "",
     transform=ax.transAxes,
-    ha="right", va="top",
-    fontsize=9, color="#e6edf3",
+    ha="right",
+    va="top",
+    fontsize=9,
+    color="#e6edf3",
     linespacing=1.7,
     fontfamily="monospace",
-    bbox=dict(boxstyle="round,pad=0.55", facecolor="#21262d",
-              edgecolor="#30363d", alpha=0.92),
+    bbox=dict(
+        boxstyle="round,pad=0.55", facecolor="#21262d", edgecolor="#30363d", alpha=0.92
+    ),
     zorder=5,
 )
 
@@ -138,6 +181,7 @@ ul_min_ann = ul_max_ann = None
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def make_annotation(ax, label, value, ts, offset_y, color):
     """Create a single annotated callout pointing at (ts, value)."""
     va = "top" if offset_y < 0 else "bottom"
@@ -146,16 +190,20 @@ def make_annotation(ax, label, value, ts, offset_y, color):
         xy=(ts, value),
         xytext=(0, offset_y),
         textcoords="offset points",
-        ha="center", va=va,
-        fontsize=8, color=color,
+        ha="center",
+        va=va,
+        fontsize=8,
+        color=color,
         arrowprops=dict(arrowstyle="-|>", color=color, lw=0.8),
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="#21262d",
-                  edgecolor=color, alpha=0.85),
+        bbox=dict(
+            boxstyle="round,pad=0.3", facecolor="#21262d", edgecolor=color, alpha=0.85
+        ),
         zorder=6,
     )
 
 
 # ── Animation callback ────────────────────────────────────────────────────────
+
 
 def update(_frame):
     global dl_area, ul_area
@@ -182,12 +230,16 @@ def update(_frame):
 
     # ── Derived stats ────────────────────────────────────────────────────────
     dl_avg = sum(download_mbps) / len(download_mbps)
-    dl_min = min(download_mbps);  dl_min_i = download_mbps.index(dl_min)
-    dl_max = max(download_mbps);  dl_max_i = download_mbps.index(dl_max)
+    dl_min = min(download_mbps)
+    dl_min_i = download_mbps.index(dl_min)
+    dl_max = max(download_mbps)
+    dl_max_i = download_mbps.index(dl_max)
 
     ul_avg = sum(upload_mbps) / len(upload_mbps)
-    ul_min = min(upload_mbps);    ul_min_i = upload_mbps.index(ul_min)
-    ul_max = max(upload_mbps);    ul_max_i = upload_mbps.index(ul_max)
+    ul_min = min(upload_mbps)
+    ul_min_i = upload_mbps.index(ul_min)
+    ul_max = max(upload_mbps)
+    ul_max_i = upload_mbps.index(ul_max)
 
     overall_max = max(dl_max, ul_max)
 
@@ -199,11 +251,13 @@ def update(_frame):
 
     # ── Fills ────────────────────────────────────────────────────────────────
     dl_area.remove()
-    dl_area = ax.fill_between(timestamps, download_mbps,
-                              alpha=0.12, color="#0c451a", zorder=2)
+    dl_area = ax.fill_between(
+        timestamps, download_mbps, alpha=0.12, color=COLOR_RED, zorder=2
+    )
     ul_area.remove()
-    ul_area = ax.fill_between(timestamps, upload_mbps,
-                              alpha=0.12, color="#7a0c06", zorder=2)
+    ul_area = ax.fill_between(
+        timestamps, upload_mbps, alpha=0.12, color=COLOR_GRN, zorder=2
+    )
 
     # ── Axes limits ──────────────────────────────────────────────────────────
     ax.set_xlim(timestamps[0], timestamps[-1])
@@ -225,12 +279,29 @@ def update(_frame):
         if ann is not None:
             ann.remove()
 
-    dl_min_ann = make_annotation(ax, "DL Min", dl_min, timestamps[dl_min_i], -42, "#ff7b72")
-    dl_max_ann = make_annotation(ax, "DL Max", dl_max, timestamps[dl_max_i], +42, "#3fb950")
-    ul_min_ann = make_annotation(ax, "UL Min", ul_min, timestamps[ul_min_i], -42, "#d2a8ff")
-    ul_max_ann = make_annotation(ax, "UL Max", ul_max, timestamps[ul_max_i], +42, "#e6b8f0")
+    dl_min_ann = make_annotation(
+        ax, "DL Min", dl_min, timestamps[dl_min_i], -42, "#ff7b72"
+    )
+    dl_max_ann = make_annotation(
+        ax, "DL Max", dl_max, timestamps[dl_max_i], +42, "#3fb950"
+    )
+    ul_min_ann = make_annotation(
+        ax, "UL Min", ul_min, timestamps[ul_min_i], -42, "#d2a8ff"
+    )
+    ul_max_ann = make_annotation(
+        ax, "UL Max", ul_max, timestamps[ul_max_i], +42, "#e6b8f0"
+    )
 
     return dl_line, ul_line, dl_avg_line, ul_avg_line, subtitle, stats_text
+
+@click.command()
+@click.option('--interval','-i', default=POLL_INTERVAL_SECONDS, help=f"Sampling interval, default is {POLL_INTERVAL_SECONDS} ")
+@click.option('--points','-p',   default=MAX_POINTS, help=f"Number of samples to display, default is {MAX_POINTS}")
+def main(interval, points):
+    """ 
+    Main entry, parse args, start the loops
+    """
+    pass
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -240,8 +311,9 @@ if __name__ == "__main__":
     worker.start()
 
     ani = animation.FuncAnimation(
-        fig, update,
-        interval=1000,
+        fig,
+        update,
+        interval=ANIMATION_UPDATE_MSECS,
         blit=False,
         cache_frame_data=False,
     )
