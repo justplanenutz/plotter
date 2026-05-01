@@ -12,38 +12,41 @@ Features:
 Requirements:
     pip install matplotlib speedtest-cli
 """
+
 # pylint: disable=invalid-name,global-statement
 
 import threading
 import time
 import datetime
 import queue
-import logging 
+import logging
 
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import matplotlib.dates as mdates
-import speedtest
 import click
+import speedtest
 
 # ── Configuration ────────────────────────────────────────────────────────────
-POLL_INTERVAL_SECONDS_DEFAULT = 60  # seconds between speed tests (min ~10 s recommended)
+POLL_INTERVAL_SECONDS_DEFAULT = (
+    60  # seconds between speed tests (min ~10 s recommended)
+)
 MAX_POINTS_DEFAULT = 180  # rolling window of data points shown on the graph
 POLL_INTERVAL_SECONDS = POLL_INTERVAL_SECONDS_DEFAULT
 MAX_POINTS = MAX_POINTS_DEFAULT
-ANIMATION_UPDATE_MSECS=1000
+ANIMATION_UPDATE_MSECS = 1000
 COLOR_GRN = "#3bd44d"
 COLOR_RED = "#d43b43"
 # ─────────────────────────────────────────────────────────────────────────────
 # init the logger
-FORMATTER =  logging.Formatter = logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d,%H:%M:%SZ",
-        )
-#log= logging.Logger = logging.getLogger()
+FORMATTER = logging.Formatter = logging.Formatter(
+    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d,%H:%M:%SZ",
+)
+# log= logging.Logger = logging.getLogger()
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(FORMATTER)
-#log.addHandler(stream_handler)
+# log.addHandler(stream_handler)
 
 # Thread-safe queue: worker → main thread
 # Payload: ("ok", download_mbps, upload_mbps) | ("err", message)
@@ -63,7 +66,7 @@ status_message = "Initialising first speed test…"
 
 def speedtest_worker() -> None:
     """Run speed tests in a loop and push results onto result_queue."""
-    #log.info("starting sampler")
+    # log.info("starting sampler")
     global status_message
 
     st = speedtest.Speedtest(secure=False)
@@ -71,15 +74,15 @@ def speedtest_worker() -> None:
     while True:
         try:
             status_message = "Finding best server…"
-            #log.info(status_message)
+            # log.info(status_message)
             st.get_best_server()
 
             status_message = "Testing download speed…"
-            #log.info(status_message)
+            # log.info(status_message)
             dl_bits = st.download()
 
             status_message = "Testing upload speed…"
-            #log.info(status_message)
+            # log.info(status_message)
             ul_bits = st.upload()
 
             dl = dl_bits / 1_000_000
@@ -89,7 +92,7 @@ def speedtest_worker() -> None:
             status_message = (
                 f"↓ {dl:.2f}  ↑ {ul:.2f} Mb/s  |  next in {POLL_INTERVAL_SECONDS}s"
             )
-            #log.info(status_message)
+            # log.info(status_message)
 
         except Exception as exc:
             result_queue.put(("err", str(exc)))
@@ -145,7 +148,7 @@ ax.set_title(
 )
 subtitle = ax.text(
     0.5,
-    1.01,
+    0.98,
     status_message,
     transform=ax.transAxes,
     ha="center",
@@ -311,17 +314,28 @@ def update(_frame):
 
     return dl_line, ul_line, dl_avg_line, ul_avg_line, subtitle, stats_text
 
+
 @click.command()
-@click.option('--interval','-i', default=POLL_INTERVAL_SECONDS_DEFAULT, help=f"Sampling interval, default is {POLL_INTERVAL_SECONDS_DEFAULT} ")
-@click.option('--points','-p',   default=MAX_POINTS_DEFAULT, help=f"Number of samples to display, default is {MAX_POINTS_DEFAULT}")
+@click.option(
+    "--interval",
+    "-i",
+    default=POLL_INTERVAL_SECONDS_DEFAULT,
+    help=f"Sampling interval, default is {POLL_INTERVAL_SECONDS_DEFAULT} ",
+)
+@click.option(
+    "--points",
+    "-p",
+    default=MAX_POINTS_DEFAULT,
+    help=f"Number of samples to display, default is {MAX_POINTS_DEFAULT}",
+)
 def main(interval, points):
-    """ 
+    """
     Main entry, parse args, start the loops
     """
 
     MAX_POINTS = points
-    POLL_INTERVAL_SECONDS = interval 
-    print (f"interval : {POLL_INTERVAL_SECONDS}, max points {MAX_POINTS}")
+    POLL_INTERVAL_SECONDS = interval
+    print(f"interval : {POLL_INTERVAL_SECONDS}, max points {MAX_POINTS}")
 
     worker = threading.Thread(target=speedtest_worker, daemon=True)
     worker.start()
@@ -337,6 +351,7 @@ def main(interval, points):
     plt.tight_layout()
     plt.show()
 
+
 if __name__ == "__main__":
-    #log.info('Starting monitor')
+    # log.info('Starting monitor')
     main()
