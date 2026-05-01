@@ -13,13 +13,14 @@ Requirements:
     pip install matplotlib speedtest-cli
 """
 
-# pylint: disable=invalid-name,global-statement
+# pylint: disable=invalid-name,global-statement,no-value-for-parameter,too-many-locals
 
 import threading
 import time
 import datetime
 import queue
 import logging
+from typing import NamedTuple
 
 import matplotlib.pyplot as plt
 from matplotlib import animation
@@ -94,7 +95,7 @@ def speedtest_worker() -> None:
             )
             # log.info(status_message)
 
-        except Exception as exc:
+        except (speedtest.SpeedtestException, OSError) as exc:
             result_queue.put(("err", str(exc)))
             status_message = f"Error: {exc}"
 
@@ -188,9 +189,12 @@ stats_text = ax.text(
     color="#e6edf3",
     linespacing=1.7,
     fontfamily="monospace",
-    bbox=dict(
-        boxstyle="round,pad=0.55", facecolor="#21262d", edgecolor="#30363d", alpha=0.92
-    ),
+    bbox={
+        "boxstyle": "round,pad=0.55",
+        "facecolor": "#21262d",
+        "edgecolor": "#30363d",
+        "alpha": 0.92,
+    },
     zorder=5,
 )
 
@@ -202,22 +206,35 @@ ul_min_ann = ul_max_ann = None
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def make_annotation(ax, label, value, ts, offset_y, color):
-    """Create a single annotated callout pointing at (ts, value)."""
-    va = "top" if offset_y < 0 else "bottom"
-    return ax.annotate(
-        f"{label}\n{value:.2f}",
-        xy=(ts, value),
-        xytext=(0, offset_y),
+class _AnnotationSpec(NamedTuple):
+    """Parameters for a single min/max callout."""
+
+    label: str
+    value: float
+    timestamp: datetime.datetime
+    offset_y: int
+    color: str
+
+
+def make_annotation(axes, spec: _AnnotationSpec):
+    """Create a single annotated callout pointing at (timestamp, value)."""
+    va = "top" if spec.offset_y < 0 else "bottom"
+    return axes.annotate(
+        f"{spec.label}\n{spec.value:.2f}",
+        xy=(spec.timestamp, spec.value),
+        xytext=(0, spec.offset_y),
         textcoords="offset points",
         ha="center",
         va=va,
         fontsize=8,
-        color=color,
-        arrowprops=dict(arrowstyle="-|>", color=color, lw=0.8),
-        bbox=dict(
-            boxstyle="round,pad=0.3", facecolor="#21262d", edgecolor=color, alpha=0.85
-        ),
+        color=spec.color,
+        arrowprops={"arrowstyle": "-|>", "color": spec.color, "lw": 0.8},
+        bbox={
+            "boxstyle": "round,pad=0.3",
+            "facecolor": "#21262d",
+            "edgecolor": spec.color,
+            "alpha": 0.85,
+        },
         zorder=6,
     )
 
@@ -226,6 +243,9 @@ def make_annotation(ax, label, value, ts, offset_y, color):
 
 
 def update(_frame):
+    """
+    Update the image
+    """
     global dl_area, ul_area
     global dl_min_ann, dl_max_ann, ul_min_ann, ul_max_ann
 
@@ -300,16 +320,20 @@ def update(_frame):
             ann.remove()
 
     dl_min_ann = make_annotation(
-        ax, "DL Min", dl_min, timestamps[dl_min_i], -42, "#ff7b72"
+        ax,
+        _AnnotationSpec("DL Min", dl_min, timestamps[dl_min_i], -42, "#ff7b72"),
     )
     dl_max_ann = make_annotation(
-        ax, "DL Max", dl_max, timestamps[dl_max_i], +42, "#3fb950"
+        ax,
+        _AnnotationSpec("DL Max", dl_max, timestamps[dl_max_i], 42, "#3fb950"),
     )
     ul_min_ann = make_annotation(
-        ax, "UL Min", ul_min, timestamps[ul_min_i], -42, "#d2a8ff"
+        ax,
+        _AnnotationSpec("UL Min", ul_min, timestamps[ul_min_i], -42, "#d2a8ff"),
     )
     ul_max_ann = make_annotation(
-        ax, "UL Max", ul_max, timestamps[ul_max_i], +42, "#e6b8f0"
+        ax,
+        _AnnotationSpec("UL Max", ul_max, timestamps[ul_max_i], 42, "#e6b8f0"),
     )
 
     return dl_line, ul_line, dl_avg_line, ul_avg_line, subtitle, stats_text
@@ -332,6 +356,7 @@ def main(interval, points):
     """
     Main entry, parse args, start the loops
     """
+    global MAX_POINTS, POLL_INTERVAL_SECONDS
 
     MAX_POINTS = points
     POLL_INTERVAL_SECONDS = interval
@@ -340,7 +365,7 @@ def main(interval, points):
     worker = threading.Thread(target=speedtest_worker, daemon=True)
     worker.start()
 
-    ani = animation.FuncAnimation(
+    _ = animation.FuncAnimation(
         fig,
         update,
         interval=ANIMATION_UPDATE_MSECS,
