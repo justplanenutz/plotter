@@ -4,13 +4,13 @@ Real-Time Internet Speed Monitor
 Runs speedtest-cli in a background thread and plots download AND upload speed
 live with matplotlib.
 Features:
-  • Download line (blue) + upload line (purple)
+  • Download line (red) + upload line (green)
   • Per-series dashed average lines
   • Min / max callout annotations per series
   • Stats summary box (min / avg / max) for both series
 
 Requirements:
-    pip install matplotlib speedtest-cli
+    pip install matplotlib speedtest-cli click
 """
 
 # pylint: disable=invalid-name,global-statement,no-value-for-parameter,too-many-locals
@@ -32,7 +32,7 @@ import speedtest
 POLL_INTERVAL_SECONDS_DEFAULT = (
     60  # seconds between speed tests (min ~10 s recommended)
 )
-MAX_POINTS_DEFAULT = 180  # rolling window of data points shown on the graph
+MAX_POINTS_DEFAULT = 360  # rolling window of data points shown on the graph
 POLL_INTERVAL_SECONDS = POLL_INTERVAL_SECONDS_DEFAULT
 MAX_POINTS = MAX_POINTS_DEFAULT
 ANIMATION_UPDATE_MSECS = 1000
@@ -58,6 +58,9 @@ timestamps: list[datetime.datetime] = []
 download_mbps: list[float] = []
 upload_mbps: list[float] = []
 
+# threading lock to protect status_message
+status_message_lock = threading.Lock()
+
 # Status string displayed as the graph subtitle
 status_message = "Initialising first speed test…"
 
@@ -76,15 +79,18 @@ def speedtest_worker() -> None:
 
     while True:
         try:
-            status_message = "Finding best server…"
+            with status_message_lock:
+                status_message = "Finding best server…"
             log.debug(status_message)
             st.get_best_server()
 
-            status_message = "Testing download speed…"
+            with status_message_lock:
+                status_message = "Testing download speed…"
             log.debug(status_message)
             dl_bits = st.download()
 
-            status_message = "Testing upload speed…"
+            with status_message_lock:
+                status_message = "Testing upload speed…"
             log.debug(status_message)
             ul_bits = st.upload()
 
@@ -92,14 +98,17 @@ def speedtest_worker() -> None:
             ul = ul_bits / 1_000_000
 
             result_queue.put(("ok", dl, ul))
-            status_message = (
-                f"↓ {dl:.2f}  ↑ {ul:.2f} Mb/s  |  next in {POLL_INTERVAL_SECONDS}s"
-            )
+            with status_message_lock:
+                status_message = (
+                    f"↓ {dl:.2f}  ↑ {ul:.2f} Mb/s  |  next in {POLL_INTERVAL_SECONDS}s"
+                )
             log.info(status_message)
 
         except (speedtest.SpeedtestException, OSError) as exc:
             result_queue.put(("err", str(exc)))
-            status_message = f"Error: {exc}"
+            with status_message_lock:
+                status_message = f"Error: {exc}"
+            log.error(status_message)
 
         time.sleep(POLL_INTERVAL_SECONDS)
 
@@ -252,19 +261,21 @@ def update(_frame):
     global dl_min_ann, dl_max_ann, ul_min_ann, ul_max_ann
 
     # Drain everything the worker has sent since the last frame
-    while not result_queue.empty():
-        item = result_queue.get_nowait()
-        if item[0] == "ok":
-            _, dl, ul = item
-            timestamps.append(datetime.datetime.now())
-            download_mbps.append(dl)
-            upload_mbps.append(ul)
+    while True:
+        try:        
+            item = result_queue.get_nowait()
+            if item[0] == "ok":
+                _, dl, ul = item
+                timestamps.append(datetime.datetime.now())
+                download_mbps.append(dl)
+                upload_mbps.append(ul)
 
-            if len(timestamps) > MAX_POINTS:
-                timestamps.pop(0)
-                download_mbps.pop(0)
-                upload_mbps.pop(0)
-
+                if len(timestamps) > MAX_POINTS:
+                    timestamps.pop(0)
+                    download_mbps.pop(0)
+                    upload_mbps.pop(0)
+        except queue.Empty:
+            break
     subtitle.set_text(status_message)
 
     if len(timestamps) < 2:
