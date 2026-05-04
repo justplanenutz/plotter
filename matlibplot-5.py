@@ -40,15 +40,15 @@ COLOR_GRN = "#3bd44d"
 COLOR_RED = "#d43b43"
 # ─────────────────────────────────────────────────────────────────────────────
 # init the logger
-FORMATTER = logging.Formatter = logging.Formatter(
+FORMATTER = logging.Formatter(
     fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d,%H:%M:%SZ",
 )
-# log= logging.Logger = logging.getLogger()
+log = logging.getLogger('matplotlib-5')
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(FORMATTER)
-# log.addHandler(stream_handler)
-
+log.addHandler(stream_handler)
+log.setLevel(logging.INFO)
 # Thread-safe queue: worker → main thread
 # Payload: ("ok", download_mbps, upload_mbps) | ("err", message)
 result_queue: queue.Queue = queue.Queue()
@@ -66,8 +66,10 @@ status_message = "Initialising first speed test…"
 
 
 def speedtest_worker() -> None:
-    """Run speed tests in a loop and push results onto result_queue."""
-    # log.info("starting sampler")
+    """
+    Run speed tests in a loop and push results onto result_queue.
+    """
+    log.info("starting sampler")
     global status_message
 
     st = speedtest.Speedtest(secure=False)
@@ -75,15 +77,15 @@ def speedtest_worker() -> None:
     while True:
         try:
             status_message = "Finding best server…"
-            # log.info(status_message)
+            log.debug(status_message)
             st.get_best_server()
 
             status_message = "Testing download speed…"
-            # log.info(status_message)
+            log.debug(status_message)
             dl_bits = st.download()
 
             status_message = "Testing upload speed…"
-            # log.info(status_message)
+            log.debug(status_message)
             ul_bits = st.upload()
 
             dl = dl_bits / 1_000_000
@@ -93,7 +95,7 @@ def speedtest_worker() -> None:
             status_message = (
                 f"↓ {dl:.2f}  ↑ {ul:.2f} Mb/s  |  next in {POLL_INTERVAL_SECONDS}s"
             )
-            # log.info(status_message)
+            log.info(status_message)
 
         except (speedtest.SpeedtestException, OSError) as exc:
             result_queue.put(("err", str(exc)))
@@ -378,5 +380,5 @@ def main(interval, points):
 
 
 if __name__ == "__main__":
-    # log.info('Starting monitor')
+    log.info('Starting monitor')
     main()
